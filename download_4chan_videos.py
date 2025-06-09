@@ -9,8 +9,6 @@ from bs4 import BeautifulSoup
 from webdriver_manager.chrome import ChromeDriverManager
 import re
 import string
-from tqdm import tqdm
-
 
 
 def sanitize_title(title):
@@ -28,31 +26,23 @@ def download_video(video_url, output_dir):
         video_name = video_url.split("/")[-1]
         output_path = os.path.join(output_dir, video_name)
 
+        # Check if the video file already exists
         if os.path.exists(output_path):
-            tqdm.write(f"Video {video_name} already exists, skipping download.")
+            print(f"Video {video_name} already exists, skipping download.")
             return
-
-        tqdm.write(f"Downloading video from: {video_url}")
+        
+        print(f"Downloading video from: {video_url}")
         response = requests.get(video_url, stream=True)
-        total_size = int(response.headers.get('content-length', 0))
-        chunk_size = 1024
-
-        with open(output_path, "wb") as file, tqdm(
-            total=total_size,
-            unit='B',
-            unit_scale=True,
-            unit_divisor=1024,
-            desc=f"Downloading {video_name}",
-            leave=False
-        ) as progress_bar:
-            for chunk in response.iter_content(chunk_size=chunk_size):
+        
+        # Download the video only if it doesn't exist
+        with open(output_path, "wb") as file:
+            for chunk in response.iter_content(chunk_size=1024):
                 if chunk:
                     file.write(chunk)
-                    progress_bar.update(len(chunk))
-
-        tqdm.write(f"Successfully downloaded: {video_name}")
+        
+        print(f"Successfully downloaded: {video_name}")
     except Exception as e:
-        tqdm.write(f"Failed to download video from {video_url}: {str(e)}")
+        print(f"Failed to download video from {video_url}: {str(e)}")
 
 
 def get_video_urls(thread_url, driver):
@@ -129,27 +119,30 @@ def main():
     base_output_dir = "downloads"
     os.makedirs(base_output_dir, exist_ok=True)
 
-    # Process each thread with a global progress bar
-    with tqdm(total=len(thread_urls), desc="Threads Progress") as thread_progress:
-        for idx, thread_url in enumerate(thread_urls, 1):
-            tqdm.write(f"\nProcessing thread {idx}/{len(thread_urls)}: {thread_url}")
-            
-            thread_title = get_thread_title(thread_url, driver)
-            thread_output_dir = os.path.join(base_output_dir, thread_title)
-            os.makedirs(thread_output_dir, exist_ok=True)
-
-            video_urls = get_video_urls(thread_url, driver)
-
-            if video_urls:
-                tqdm.write(f"Found {len(video_urls)} video(s) to download.")
-                for video_url in tqdm(video_urls, desc=f"Thread {idx} Videos", leave=False):
-                    download_video(video_url, thread_output_dir)
-                    time.sleep(random.uniform(2, 5))
-            else:
-                tqdm.write(f"No videos found in thread {thread_url}.")
-
-            time.sleep(random.uniform(5, 22))
-            thread_progress.update(1)
+    # Process each thread
+    for idx, thread_url in enumerate(thread_urls, 1):
+        print(f"\nProcessing thread {idx}/{len(thread_urls)}: {thread_url}")
+        
+        # Get the title of the thread and sanitize it for a valid folder name
+        thread_title = get_thread_title(thread_url, driver)
+        
+        # Ensure the thread title is used as the folder name inside the 'downloads' directory
+        thread_output_dir = os.path.join(base_output_dir, thread_title)
+        os.makedirs(thread_output_dir, exist_ok=True)
+        
+        video_urls = get_video_urls(thread_url, driver)
+        
+        if video_urls:
+            print(f"Found {len(video_urls)} video(s) to download.")
+            for video_url in video_urls:
+                download_video(video_url, thread_output_dir)
+                # Random interval between downloads
+                time.sleep(random.uniform(2, 5))  # Random sleep between 5-10 seconds
+        else:
+            print(f"No videos found in thread {thread_url}.")
+        
+        # Random interval between threads to avoid rate limiting
+        time.sleep(random.uniform(5, 22))  # Random sleep between 10-20 seconds
 
     print("\nAll threads processed.")
     driver.quit()
